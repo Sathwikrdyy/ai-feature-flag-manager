@@ -19,7 +19,7 @@ function App() {
   const [toast, setToast] = useState('')
 
   useEffect(() => {
-    flagService.list().then(setFlags).catch(() => setLoadError('We could not load your flags. Refresh to try again.')).finally(() => setLoading(false))
+    flagService.list().then(setFlags).catch((error) => setLoadError(error instanceof Error ? error.message : 'We could not load your flags. Refresh to try again.')).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
@@ -84,7 +84,7 @@ function App() {
             <div className="toolbar"><div className="search-box"><Icon name="search" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search flags" aria-label="Search flags" /></div><div className="filter-tabs" role="group" aria-label="Filter flags">{(['all', 'enabled', 'disabled'] as Filter[]).map((item) => <button key={item} className={filter === item ? 'filter-active' : ''} type="button" onClick={() => setFilter(item)}>{item[0].toUpperCase() + item.slice(1)}{item === 'all' && <span>{flags.length}</span>}</button>)}</div></div>
             {loadError ? <div className="empty-state"><Icon name="alert" /><h3>Something went wrong</h3><p>{loadError}</p></div> : loading ? <div className="empty-state"><div className="spinner" /><p>Loading flags…</p></div> : filteredFlags.length === 0 ? <div className="empty-state"><div className="empty-icon"><Icon name="search" /></div><h3>No flags found</h3><p>Try a different search or create a new flag.</p></div> : <div className="table-wrap"><table><thead><tr><th scope="col">Flag</th><th scope="col">Type</th><th scope="col">Last updated</th><th scope="col" className="status-heading">Status</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{filteredFlags.map((flag) => <tr key={flag.id}><td><div className="flag-title"><span className={`flag-status-dot ${flag.enabled ? 'on' : ''}`} /><div><strong>{flag.name}</strong><span className="flag-key">{flag.key}</span><span className="flag-description">{flag.description}</span></div></div></td><td><span className={`type-pill ${flag.type}`}>{flag.type === 'release' ? 'Release' : 'Experiment'}</span></td><td><span className="updated-date">{formatUpdatedAt(flag.updatedAt)}</span><span className="updated-by">by {flag.updatedBy} · {formatUpdatedTime(flag.updatedAt)}</span></td><td className="status-cell"><span className={`status-pill ${flag.enabled ? 'enabled' : 'disabled'}`}><span />{flag.enabled ? 'Enabled' : 'Disabled'}</span></td><td className="toggle-cell"><Toggle checked={flag.enabled} label={`${flag.enabled ? 'Disable' : 'Enable'} ${flag.name}`} onChange={() => toggle(flag)} /></td></tr>)}</tbody></table></div>}
           </section>
-          <footer className="page-footer"><span><span className="footer-dot" />Changes are saved automatically</span><span>v1.0.0 · Local workspace</span></footer>
+          <footer className="page-footer"><span><span className="footer-dot" />Changes are saved automatically</span><span>v1.0.0 · API-backed workspace</span></footer>
         </div>
       </main>
       {showCreate && <CreateFlagModal flags={flags} onClose={() => setShowCreate(false)} onCreate={create} />}

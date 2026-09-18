@@ -1,66 +1,48 @@
-import { seedFlags } from '../data'
 import type { FeatureFlag, NewFeatureFlag } from '../types'
 
-const STORAGE_KEY = 'ai-flag-manager.flags.v1'
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
 
-const makeRequestId = () => `ff-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-
-const readFlags = (): FeatureFlag[] => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return seedFlags
-    const parsed: unknown = JSON.parse(saved)
-    return Array.isArray(parsed) ? (parsed as FeatureFlag[]) : seedFlags
-  } catch (error) {
-    console.warn(`[flags] read failed (${makeRequestId()})`, error)
-    return seedFlags
-  }
+interface ApiErrorPayload {
+  error?: { message?: string; requestId?: string }
 }
 
-const writeFlags = (flags: FeatureFlag[]) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(flags))
-  } catch (error) {
-    console.error(`[flags] write failed (${makeRequestId()})`, error)
-    throw new Error('Your browser could not save this change. Please check storage permissions.')
+const makeRequestId = () => `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const requestId = makeRequestId()
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Request-ID': requestId,
+      ...init?.headers,
+    },
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as ApiErrorPayload | null
+    const message = payload?.error?.message ?? `Request failed with status ${response.status}.`
+    console.error(`[flags] request failed (${payload?.error?.requestId ?? requestId})`, { path, status: response.status })
+    throw new Error(message)
   }
+  return response.json() as Promise<T>
 }
 
 export const flagService = {
   async list(): Promise<FeatureFlag[]> {
-    return Promise.resolve(readFlags())
+    return request<FeatureFlag[]>('/flags')
   },
 
   async setEnabled(id: string, enabled: boolean): Promise<FeatureFlag> {
-    const flags = readFlags()
-    const index = flags.findIndex((flag) => flag.id === id)
-    if (index === -1) throw new Error('This flag no longer exists. Refresh and try again.')
-
-    const updated = {
-      ...flags[index],
-      enabled,
-      updatedAt: new Date().toISOString(),
-      updatedBy: 'You',
-    }
-    flags[index] = updated
-    writeFlags(flags)
-    console.info(`[flags] toggle ${makeRequestId()}`, { id, enabled })
-    return updated
+    return request<FeatureFlag>(`/flags/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    })
   },
 
   async create(input: NewFeatureFlag): Promise<FeatureFlag> {
-    const flags = readFlags()
-    if (flags.some((flag) => flag.key === input.key)) {
-      throw new Error('A flag with this key already exists.')
-    }
-    const created: FeatureFlag = {
-      ...input,
-      id: `flag-${crypto.randomUUID?.() ?? makeRequestId()}`,
-      updatedAt: new Date().toISOString(),
-      updatedBy: 'You',
-    }
-    writeFlags([created, ...flags])
-    console.info(`[flags] create ${makeRequestId()}`, { id: created.id })
-    return created
+    return request<FeatureFlag>('/flags', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
   },
 }
